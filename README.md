@@ -51,4 +51,4 @@ Claude calls "get_weather", which fetches live data from the wttr.in API and sho
 
 - **No subdirectories:** All notes are stored flat in "/dev-notes" There's no folder or tagging system.
 - **No delete tool:** Notes can only be removed by manually deleting the .md file
-- **Weather API dependency:** The "get_weather" tool relies on the free wttr.in service, which has no SLA and may occasionally be slow or unavailable.
+- **Weather API dependency:** The "get_weather" tool relies on the free wttr.in service, which may occasionally be slow or unavailable.
