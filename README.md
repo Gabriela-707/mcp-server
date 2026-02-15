@@ -12,8 +12,8 @@ While Claude Code is good at generating information, this server will help Claud
 
 2. **Clone and install dependencies:**
 
-   cd dev-notes-server
-   npm install
+   - cd dev-notes-server
+   - npm install
 
 3. **Configure Claude Code** by adding the server to your MCP settings. Create or edit ".mcp.json" in the project root
    {
