@@ -1,0 +1,73 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Dev Notes MCP Server – Implementation Walkthrough",
+  "description": "A guided tour of how this MCP (Model Context Protocol) server is built, from imports to startup. Install the CodeTour extension (https://marketplace.visualstudio.com/items?itemName=vsls-liveshare.codetour) to run this tour interactively in VS Code.",
+  "steps": [
+    {
+      "file": "package.json",
+      "line": 1,
+      "title": "Project Configuration",
+      "description": "## Project Setup\n\nThis is an ES module Node.js project (`\"type\": \"module\"`) with one key dependency: `@modelcontextprotocol/sdk`.\n\nThe MCP SDK provides the building blocks for creating servers that AI assistants like Claude can communicate with.\n\n**References:**\n- [MCP SDK on npm](https://www.npmjs.com/package/@modelcontextprotocol/sdk)\n- [Model Context Protocol specification](https://modelcontextprotocol.io)\n- [MCP TypeScript SDK repo](https://github.com/modelcontextprotocol/typescript-sdk)"
+    },
+    {
+      "file": "index.js",
+      "line": 13,
+      "title": "Imports – MCP SDK",
+      "description": "## Core Imports\n\n- **`McpServer`** – The high-level server class that handles registering tools and managing the MCP protocol lifecycle.\n- **`StdioServerTransport`** – A transport layer that lets the server communicate over **stdin/stdout**, which is how Claude Code launches and talks to MCP servers.\n- **`zod`** – Used for schema validation of tool parameters. The SDK uses Zod schemas to describe what arguments each tool accepts.\n\n**References:**\n- [Building MCP Servers guide](https://modelcontextprotocol.io/docs/concepts/servers)\n- [Zod documentation](https://zod.dev)"
+    },
+    {
+      "file": "index.js",
+      "line": 23,
+      "title": "Notes Directory Constant",
+      "description": "## Storage Location\n\nAll notes are stored in `~/dev-notes/` (the user's home directory). This uses Node's `os.homedir()` to resolve the path cross-platform (works on Windows, macOS, and Linux)."
+    },
+    {
+      "file": "index.js",
+      "line": 29,
+      "title": "Helper – slugify()",
+      "description": "## Filename Slugification\n\nConverts a human-readable title into a filesystem-safe markdown filename:\n\n1. Lowercase the string\n2. Trim whitespace\n3. Replace non-alphanumeric characters with dashes\n4. Strip leading/trailing dashes\n5. Append `.md`\n\nExample: `\"Project Ideas\"` → `\"project-ideas.md\"`\n\nThis ensures consistent, predictable filenames regardless of what title the user provides."
+    },
+    {
+      "file": "index.js",
+      "line": 43,
+      "title": "Helper – ensureNotesDir()",
+      "description": "## Directory Safety\n\n`fs.mkdir` with `{ recursive: true }` creates `~/dev-notes/` if it doesn't exist, and does nothing if it already does. Every tool calls this before doing file I/O, so the server never crashes due to a missing directory."
+    },
+    {
+      "file": "index.js",
+      "line": 50,
+      "title": "Server Instantiation",
+      "description": "## Creating the MCP Server\n\nThe `McpServer` constructor takes a **name** and **version**. These are sent to the client (Claude Code) during the MCP handshake so it knows what server it's talking to.\n\n**References:**\n- [MCP Server class API](https://github.com/modelcontextprotocol/typescript-sdk#mcpserver)\n- [MCP protocol initialization](https://modelcontextprotocol.io/docs/concepts/architecture)"
+    },
+    {
+      "file": "index.js",
+      "line": 60,
+      "title": "Tool 1: save_note",
+      "description": "## Registering the save_note Tool\n\n`server.tool()` registers a tool with four arguments:\n1. **Name** (`\"save_note\"`) – the identifier Claude uses to call it\n2. **Description** – tells Claude what the tool does\n3. **Parameter schema** – a Zod object defining `title` and `content` as required strings\n4. **Handler function** – the async function that runs when the tool is invoked\n\nThe handler slugifies the title, writes the file, and returns an MCP **text content** response confirming the save.\n\n**References:**\n- [MCP Tools concept](https://modelcontextprotocol.io/docs/concepts/tools)"
+    },
+    {
+      "file": "index.js",
+      "line": 90,
+      "title": "Tool 2: list_notes",
+      "description": "## Registering the list_notes Tool\n\nThis tool takes **no parameters** (empty `{}` schema). It:\n1. Reads the `~/dev-notes/` directory\n2. Filters for `.md` files\n3. Gets the `mtime` (last modified timestamp) for each file\n4. Builds a formatted summary string\n\nNote the use of `Promise.all()` to stat all files concurrently for better performance."
+    },
+    {
+      "file": "index.js",
+      "line": 127,
+      "title": "Tool 3: read_note",
+      "description": "## Registering the read_note Tool\n\nAccepts a `title` string, slugifies it to find the matching file, and returns its contents. If the file doesn't exist, it returns an **error response** by setting `isError: true` in the MCP result.\n\nThis is the MCP-standard way to signal errors back to the AI client – the structure stays the same but `isError` tells Claude the operation failed."
+    },
+    {
+      "file": "index.js",
+      "line": 162,
+      "title": "Tool 4: get_weather",
+      "description": "## Registering the get_weather Tool\n\nThis tool fetches live weather data from the free [wttr.in](https://wttr.in) API. It accepts a `location` string (city name) and returns a formatted summary including temperature, condition, humidity, and wind.\n\nKey points:\n- Uses the built-in `fetch()` API (available in Node 18+)\n- The location is URL-encoded with `encodeURIComponent()` to handle spaces and special characters\n- Returns an `isError: true` response if the API request fails\n- Unlike the other tools, this one makes an **external HTTP request** rather than local file I/O\n\n**References:**\n- [wttr.in API docs](https://github.com/chubin/wttr.in)\n- [Node.js fetch API](https://nodejs.org/docs/latest/api/globals.html#fetch)"
+    },
+    {
+      "file": "index.js",
+      "line": 202,
+      "title": "Server Startup",
+      "description": "## Connecting the Transport & Starting Up\n\nThe `main()` function:\n1. Creates a `StdioServerTransport` – this hooks into the process's **stdin** and **stdout** streams\n2. Calls `server.connect(transport)` to start the MCP protocol handshake\n3. Logs a startup message to **stderr** (important: stdout is reserved for MCP protocol messages, so any logging must go to stderr)\n\nWhen Claude Code is configured to use this server, it spawns `node index.js` as a child process and communicates over the stdio pipes.\n\n**References:**\n- [MCP Transports](https://modelcontextprotocol.io/docs/concepts/transports)\n- [Claude Code MCP server configuration](https://docs.anthropic.com/en/docs/claude-code/mcp)"
+    }
+  ]
+}
